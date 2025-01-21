@@ -1,17 +1,31 @@
 import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
 
-import { ExamplePlatformAccessory } from './platformAccessory.js';
+import { CrownstonePlatformConfig } from './config.js'
+import { CrownstoneCloud } from 'crownstone-cloud'
+import { CrownstoneSSE } from "crownstone-sse";
+import { CrownstoneUart } from 'crownstone-uart'
+import { Crownstone } from './crownstone.js';
+
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 // This is only required when using Custom Services and Characteristics not support by HomeKit
 import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes';
+
+interface SSEOptions {
+  sseUrl?:        string,
+  loginUrl?:      string,
+  hubLoginBase?:  string,
+  autoreconnect?: boolean,
+  requireAuthentication?: boolean,
+  projectName?:   string,
+}
 
 /**
  * HomebridgePlatform
  * This class is the main constructor for your plugin, this is where you should
  * parse the user config and discover/register accessories with Homebridge.
  */
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
+export class CrownstonePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
 
@@ -19,15 +33,21 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly accessories: Map<string, PlatformAccessory> = new Map();
   public readonly discoveredCacheUUIDs: string[] = [];
 
+  public readonly crownstones: Map<string, Crownstone> = new Map();
+
   // This is only required when using Custom Services and Characteristics not support by HomeKit
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public readonly CustomServices: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public readonly CustomCharacteristics: any;
 
+  public readonly cloud: CrownstoneCloud;
+  public readonly uart: CrownstoneUart;
+  public readonly sse: InstanceType<typeof CrownstoneSSE>;
+
   constructor(
     public readonly log: Logging,
-    public readonly config: PlatformConfig,
+    public readonly config: PlatformConfig & CrownstonePlatformConfig,
     public readonly api: API,
   ) {
     this.Service = api.hap.Service;
@@ -37,16 +57,29 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     this.CustomServices = new EveHomeKitTypes(this.api).Services;
     this.CustomCharacteristics = new EveHomeKitTypes(this.api).Characteristics;
 
-    this.log.debug('Finished initializing platform:', this.config.name);
+    this.config.uartDevice =  this.config.uartDevice ?? "/dev/ttyUSB0";
+
+    this.cloud = new CrownstoneCloud({
+      customCloudAddress: this.config.v1CloudUrl,
+      customCloudV2Address: this.config.v2CloudUrl,
+    });
+    this.sse = new CrownstoneSSE({
+      sseUrl: this.config.sseCloudUrl,
+      loginUrl: this.config.v1CloudUrl + "users/login",
+      hubLoginBase:  this.config.v1CloudUrl + "/Hubs",
+      autoreconnect: true,
+      requireAuthentication: true,
+    } as SSEOptions);
+    this.uart = new CrownstoneUart();
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
-    this.api.on('didFinishLaunching', () => {
+    this.api.on('didFinishLaunching', async () => {
       log.debug('Executed didFinishLaunching callback');
       // run the method to discover / register your devices as accessories
-      this.discoverDevices();
+      await this.discoverDevices();
     });
   }
 
@@ -61,77 +94,69 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     this.accessories.set(accessory.UUID, accessory);
   }
 
-  /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
-   */
-  discoverDevices() {
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-      {
-        // This is an example of a device which uses a Custom Service
-        exampleUniqueId: 'IJKL',
-        exampleDisplayName: 'Backyard',
-        CustomService: 'AirPressureSensor',
-      },
-    ];
+  sseHandler(data: any) {
+    console.log("I got an event!", data);
 
-    // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of exampleDevices) {
-      // generate a unique id for the accessory this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(device.exampleUniqueId);
+    if (data['type'] != "switchStateUpdate"){
+        return;
+    }
 
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
+    console.log("event:", data['sphere']['name']);
+
+    if (data['sphere']['name'] != this.config.sphereName) {
+      return;
+    }
+
+    let crownstone = this.crownstones.get(data['crownstone']['id']);
+    if (!crownstone) {
+      return;
+    }
+
+    crownstone.handleUpdateOn(data['crownstone']['switchState']);
+  }
+
+  async discoverDevices() {
+    await this.cloud.login(this.config.crownstoneUsername!, this.config.crownstonePassword!);
+    await this.sse.login(this.config.crownstoneUsername!, this.config.crownstonePassword!);
+    await this.sse.start(this.sseHandler.bind(this));
+
+    await this.uart.start();
+
+    let spheres = await this.cloud.spheres();
+    let sphere = spheres.find(s => s.name == this.config.sphereName);
+    if (!sphere) {
+      this.log.error('Could not find sphere ', this.config.sphereName);
+      this.log.debug('Spheres available ', spheres)
+      return;
+    }
+
+    let crownstones = await this.cloud.rest.getCrownstonesInSphere(sphere.id);
+    for (var crownstone of crownstones) {
+      const uuid = this.api.hap.uuid.generate(crownstone.id);
       const existingAccessory = this.accessories.get(uuid);
+
+      let crownstoneAccessory = undefined;
 
       if (existingAccessory) {
         // the accessory already exists
         this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+        existingAccessory.context.device = crownstone;
+        crownstoneAccessory = new Crownstone(this, existingAccessory, crownstone.id, crownstone.uid);
 
-        // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. e.g.:
-        // existingAccessory.context.device = device;
-        // this.api.updatePlatformAccessories([existingAccessory]);
-
-        // create the accessory handler for the restored accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, existingAccessory);
-
-        // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, e.g.:
-        // remove platform accessories when no longer present
-        // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-        // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
       } else {
         // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.exampleDisplayName);
+        this.log.info('Adding new accessory:', crownstone.name);
 
         // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
-
-        // store a copy of the device object in the `accessory.context`
-        // the `context` property can be used to store any data about the accessory you may need
-        accessory.context.device = device;
-
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, accessory);
+        const accessory = new this.api.platformAccessory(crownstone.name, uuid);
+        accessory.context.device = crownstone;
+        crownstoneAccessory = new Crownstone(this, accessory, crownstone.id, crownstone.uid);
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
+
+      this.crownstones.set(crownstone.id, crownstoneAccessory);
 
       // push into discoveredCacheUUIDs
       this.discoveredCacheUUIDs.push(uuid);

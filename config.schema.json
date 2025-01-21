@@ -1,16 +1,46 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "CrownstonePlugin",
   "pluginType": "platform",
   "singular": true,
   "strictValidation": false,
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Name",
+      "sphereName": {
+        "title": "Sphere to Control",
+        "type": "string",
+        "required": true
+      },
+      "crownstoneUsername": {
+        "title": "Crownstone User ID",
+        "type": "string",
+        "required": true
+      },
+      "crownstonePassword": {
+        "title": "Crownstone Password",
+        "type": "string",
+        "required": true
+      },
+      "uartDevice": {
+        "title": "Crownstone USB Device",
+        "placeholder": "/dev/ttyUSB0",
+        "type": "string",
+        "required": true
+      },
+      "v1CloudUrl": {
+        "title": "v1 Cloud URL",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+      },
+      "v2CloudUrl": {
+        "title": "v2 Cloud URL",
+        "type": "string",
+        "required": true,
+      },
+      "sseCloudUrl": {
+        "title": "SSE Cloud URL",
+        "type": "string",
+        "required": true,
       }
     }
   }
