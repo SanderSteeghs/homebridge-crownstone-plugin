@@ -1,9 +1,9 @@
 import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
 
-import { CrownstonePlatformConfig } from './config.js'
-import { CrownstoneCloud } from 'crownstone-cloud'
-import { CrownstoneSSE } from "crownstone-sse";
-import { CrownstoneUart } from 'crownstone-uart'
+import { CrownstonePlatformConfig } from './config.js';
+import { CrownstoneCloud } from 'crownstone-cloud';
+import { CrownstoneSSE } from 'crownstone-sse';
+import { CrownstoneUart } from 'crownstone-uart';
 import { Crownstone } from './crownstone.js';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
@@ -57,7 +57,7 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
     this.CustomServices = new EveHomeKitTypes(this.api).Services;
     this.CustomCharacteristics = new EveHomeKitTypes(this.api).Characteristics;
 
-    this.config.uartDevice =  this.config.uartDevice ?? "/dev/ttyUSB0";
+    this.config.uartDevice =  this.config.uartDevice ?? '/dev/ttyUSB0';
 
     this.cloud = new CrownstoneCloud({
       customCloudAddress: this.config.v1CloudUrl,
@@ -65,8 +65,8 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
     });
     this.sse = new CrownstoneSSE({
       sseUrl: this.config.sseCloudUrl,
-      loginUrl: this.config.v1CloudUrl + "users/login",
-      hubLoginBase:  this.config.v1CloudUrl + "/Hubs",
+      loginUrl: this.config.v1CloudUrl + 'users/login',
+      hubLoginBase:  this.config.v1CloudUrl + '/Hubs',
       autoreconnect: true,
       requireAuthentication: true,
     } as SSEOptions);
@@ -94,25 +94,25 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
     this.accessories.set(accessory.UUID, accessory);
   }
 
-  sseHandler(data: any) {
-    console.log("I got an event!", data);
+  isSwitchStateUpdateEvent(data: SseEvent): data is SwitchStateUpdateEvent {
+    return data.type === 'switchStateUpdate';
+  }
 
-    if (data['type'] != "switchStateUpdate"){
-        return;
-    }
-
-    console.log("event:", data['sphere']['name']);
-
-    if (data['sphere']['name'] != this.config.sphereName) {
+  sseHandler(data: SseEvent) {
+    if (!this.isSwitchStateUpdateEvent(data)) {
       return;
     }
 
-    let crownstone = this.crownstones.get(data['crownstone']['id']);
+    if (data.sphere.name !== this.config.sphereName) {
+      return;
+    }
+
+    const crownstone = this.crownstones.get(data.crownstone.id);
     if (!crownstone) {
       return;
     }
 
-    crownstone.handleUpdateOn(data['crownstone']['switchState']);
+    crownstone.handleUpdateOn(data.crownstone.percentage);
   }
 
   async discoverDevices() {
@@ -120,18 +120,18 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
     await this.sse.login(this.config.crownstoneUsername!, this.config.crownstonePassword!);
     await this.sse.start(this.sseHandler.bind(this));
 
-    await this.uart.start();
+    await this.uart.start(this.config.uartDevice);
 
-    let spheres = await this.cloud.spheres();
-    let sphere = spheres.find(s => s.name == this.config.sphereName);
+    const spheres = await this.cloud.spheres();
+    const sphere = spheres.find(s => s.name === this.config.sphereName);
     if (!sphere) {
       this.log.error('Could not find sphere ', this.config.sphereName);
-      this.log.debug('Spheres available ', spheres)
+      this.log.debug('Spheres available ', spheres);
       return;
     }
 
-    let crownstones = await this.cloud.rest.getCrownstonesInSphere(sphere.id);
-    for (var crownstone of crownstones) {
+    const crownstones = await this.cloud.rest.getCrownstonesInSphere(sphere.id);
+    for (const crownstone of crownstones) {
       const uuid = this.api.hap.uuid.generate(crownstone.id);
       const existingAccessory = this.accessories.get(uuid);
 

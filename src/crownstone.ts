@@ -1,4 +1,4 @@
-import type { PlatformAccessory, Service } from 'homebridge';
+import type { PlatformAccessory, Service, CharacteristicValue } from 'homebridge';
 
 import type { CrownstonePlatform } from './crownstone-platform.js';
 
@@ -22,7 +22,7 @@ export class Crownstone {
     private readonly platform: CrownstonePlatform,
     private readonly accessory: PlatformAccessory,
     private readonly id: string,
-    private readonly uid: number
+    private readonly uid: number,
   ) {
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -41,8 +41,8 @@ export class Crownstone {
 
     // create handlers for required characteristics
     this.service.getCharacteristic(this.platform.Characteristic.On)
-          .onGet(this.handleOnGet.bind(this))
-          .onSet(this.handleOnSet.bind(this));
+      .onGet(this.handleOnGet.bind(this))
+      .onSet(this.handleOnSet.bind(this));
   }
 
   handleUpdateOn(newValue: number) {
@@ -62,10 +62,10 @@ export class Crownstone {
   /**
    * Handle requests to set the "On" characteristic
    */
-  handleOnSet(value: any) {
+  handleOnSet(value: CharacteristicValue) {
     this.platform.log.debug('Triggered SET On:', value);
 
-    let percentage = value ? 100 : 0;
+    const percentage = value ? 100 : 0;
     this.platform.uart.switchCrownstone(this.uid, percentage);
   }
 }

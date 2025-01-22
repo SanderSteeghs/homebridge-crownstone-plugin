@@ -30,17 +30,17 @@
       "v1CloudUrl": {
         "title": "v1 Cloud URL",
         "type": "string",
-        "required": true,
+        "required": true
       },
       "v2CloudUrl": {
         "title": "v2 Cloud URL",
         "type": "string",
-        "required": true,
+        "required": true
       },
       "sseCloudUrl": {
         "title": "SSE Cloud URL",
         "type": "string",
-        "required": true,
+        "required": true
       }
     }
   }
