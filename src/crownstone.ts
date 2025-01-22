@@ -62,10 +62,14 @@ export class Crownstone {
   /**
    * Handle requests to set the "On" characteristic
    */
-  handleOnSet(value: CharacteristicValue) {
+  async handleOnSet(value: CharacteristicValue) {
     this.platform.log.debug('Triggered SET On:', value);
 
     const percentage = value ? 100 : 0;
-    this.platform.uart.switchCrownstone(this.uid, percentage);
+    await this.platform.uart.switchCrownstone(this.uid, percentage);
+
+    this.state.On = percentage > 0;
+    const cloudStone = await this.platform.cloud.crownstone(this.id);
+    await cloudStone.setCurrentSwitchState(percentage);
   }
 }

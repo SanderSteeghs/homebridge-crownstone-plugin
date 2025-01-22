@@ -142,7 +142,6 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
         this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
         existingAccessory.context.device = crownstone;
         crownstoneAccessory = new Crownstone(this, existingAccessory, crownstone.id, crownstone.uid);
-
       } else {
         // the accessory does not yet exist, so we need to create it
         this.log.info('Adding new accessory:', crownstone.name);
@@ -156,6 +155,7 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
 
+      crownstoneAccessory.handleUpdateOn(crownstone.currentSwitchState.switchState);
       this.crownstones.set(crownstone.id, crownstoneAccessory);
 
       // push into discoveredCacheUUIDs
