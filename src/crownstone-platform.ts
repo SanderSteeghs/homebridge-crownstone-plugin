@@ -8,9 +8,6 @@ import { Crownstone } from './crownstone.js';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
-// This is only required when using Custom Services and Characteristics not support by HomeKit
-import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes';
-
 interface SSEOptions {
   sseUrl?:        string,
   loginUrl?:      string,
@@ -35,12 +32,6 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
 
   public readonly crownstones: Map<string, Crownstone> = new Map();
 
-  // This is only required when using Custom Services and Characteristics not support by HomeKit
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public readonly CustomServices: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public readonly CustomCharacteristics: any;
-
   public readonly cloud: CrownstoneCloud;
   public readonly uart: CrownstoneUart;
   public readonly sse: InstanceType<typeof CrownstoneSSE>;
@@ -52,10 +43,6 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
   ) {
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
-
-    // This is only required when using Custom Services and Characteristics not support by HomeKit
-    this.CustomServices = new EveHomeKitTypes(this.api).Services;
-    this.CustomCharacteristics = new EveHomeKitTypes(this.api).Characteristics;
 
     this.config.uartDevice =  this.config.uartDevice ?? '/dev/ttyUSB0';
 
@@ -132,16 +119,19 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
 
     const crownstones = await this.cloud.rest.getCrownstonesInSphere(sphere.id);
     for (const crownstone of crownstones) {
+
+      if (crownstone.type === 'CROWNSTONE_USB') {
+        continue;
+      }
+
       const uuid = this.api.hap.uuid.generate(crownstone.id);
       const existingAccessory = this.accessories.get(uuid);
-
-      let crownstoneAccessory = undefined;
 
       if (existingAccessory) {
         // the accessory already exists
         this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
         existingAccessory.context.device = crownstone;
-        crownstoneAccessory = new Crownstone(this, existingAccessory, crownstone.id, crownstone.uid);
+        this.crownstones.set(crownstone.id, new Crownstone(this, existingAccessory, crownstone));
       } else {
         // the accessory does not yet exist, so we need to create it
         this.log.info('Adding new accessory:', crownstone.name);
@@ -149,14 +139,11 @@ export class CrownstonePlatform implements DynamicPlatformPlugin {
         // create a new accessory
         const accessory = new this.api.platformAccessory(crownstone.name, uuid);
         accessory.context.device = crownstone;
-        crownstoneAccessory = new Crownstone(this, accessory, crownstone.id, crownstone.uid);
+        this.crownstones.set(crownstone.id, new Crownstone(this, accessory, crownstone));
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
-
-      crownstoneAccessory.handleUpdateOn(crownstone.currentSwitchState.switchState);
-      this.crownstones.set(crownstone.id, crownstoneAccessory);
 
       // push into discoveredCacheUUIDs
       this.discoveredCacheUUIDs.push(uuid);
