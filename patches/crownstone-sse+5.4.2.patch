@@ -1,0 +1,26 @@
+diff --git a/node_modules/crownstone-sse/dist/CrownstoneSSE.js b/node_modules/crownstone-sse/dist/CrownstoneSSE.js
+index 67720fc..a26db01 100644
+--- a/node_modules/crownstone-sse/dist/CrownstoneSSE.js
++++ b/node_modules/crownstone-sse/dist/CrownstoneSSE.js
+@@ -204,7 +204,7 @@ exports.SseClassGenerator = function (options) {
+                     log.warn("Eventsource error", error);
+                     log.info("Reconnecting after error. Will start in 2 seconds.");
+                     this.closeEventSource();
+-                    this.reconnectTimeout = set_Timeout(() => { this.start(this.eventCallback); }, 2000);
++                    this.reconnectTimeout = set_Timeout(() => { this.start(this.eventCallback).then(resolve); }, 2000);
+                 };
+                 this.eventSource.addEventListener('open', this.listeners.open);
+                 this.eventSource.addEventListener('message', this.listeners.message);
+diff --git a/node_modules/crownstone-sse/src/CrownstoneSSE.ts b/node_modules/crownstone-sse/src/CrownstoneSSE.ts
+index 0e17bce..24c02c0 100644
+--- a/node_modules/crownstone-sse/src/CrownstoneSSE.ts
++++ b/node_modules/crownstone-sse/src/CrownstoneSSE.ts
+@@ -264,7 +264,7 @@ export const SseClassGenerator = function(options: sseConstructorOptions) : { ne
+           log.warn("Eventsource error",error);
+           log.info("Reconnecting after error. Will start in 2 seconds.");
+           this.closeEventSource();
+-          this.reconnectTimeout = set_Timeout(() => { this.start(this.eventCallback) }, 2000);
++          this.reconnectTimeout = set_Timeout(() => { this.start(this.eventCallback).then(resolve) }, 2000);
+         }
+ 
+         this.eventSource.addEventListener('open',    this.listeners.open);

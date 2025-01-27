@@ -1,0 +1,13 @@
+diff --git a/node_modules/crownstone-uart/dist/uartHandling/containers/UartMessageQueue.js b/node_modules/crownstone-uart/dist/uartHandling/containers/UartMessageQueue.js
+index 685f45e..f334350 100644
+--- a/node_modules/crownstone-uart/dist/uartHandling/containers/UartMessageQueue.js
++++ b/node_modules/crownstone-uart/dist/uartHandling/containers/UartMessageQueue.js
+@@ -7,7 +7,7 @@ const topics_1 = require("../../declarations/topics");
+ const enums_1 = require("../../declarations/enums");
+ const crownstone_core_1 = require("crownstone-core");
+ const log = Logger_1.Logger(__filename);
+-const WRITE_TIMEOUT = 150; // ms
++const WRITE_TIMEOUT = 1500; // ms
+ class UartMessageQueue {
+     constructor(writeCallback) {
+         this.queue = [];
